@@ -18,25 +18,63 @@ unsigned long currentTime = millis();
 unsigned long previousTime = 0;
 const long timeoutTime = 2000;
 
-class endpoints {
+class Endpoints {
   public:
-    void tokenizer(String s) {
+    void patternGen (String s, char delim) {
       int numPatterns = 0;
       int positions[100] = { 0 };
       for(int i = 0; i < s.length(); ++i) {
-        if(s[i] == '_') {
+        if(s[i] == delim) {
           positions[numPatterns] = i; 
           ++numPatterns;
         }
-        if(s[i] == '\0') {
-          positions[numPatterns] = i;
-          ++numPatterns;
-        }
       }
-      Serial.println(numPatterns);
-      Serial.println(positions[0]);
-      Serial.println(positions[1] - (positions[0] + 1));
-      Serial.println(positions[2] - (positions[1] + 1));
+      positions[numPatterns] = s.length();
+      ++numPatterns;
+      patterns[0] = s.substring(0,positions[0]); // -> 1,1,1
+      for(int i = 1; i <= numPatterns; ++i) {
+        patterns[i] = s.substring(positions[i-1]+1,positions[i]);
+      }
+      totalPattern = numPatterns;
+    }
+
+    void colorGen() {
+      for(int i = 0; i <= totalPattern; ++i) {
+        int index = 0;
+        String r = "";
+        String g = "";
+        String b = "";
+        int rIndex = 0;
+        int gIndex = 0;
+        int bIndex = 0;
+        for(int j = 0; j < patterns[i].length(); ++j) {
+          if (patterns[i][j] == ',') {
+            switch(index) {
+              case 0:
+                rIndex = j;
+                ++index;
+                break;
+
+              case 1:
+                gIndex = j;
+                ++index;
+                break;
+            }
+            bIndex = patterns[i].length();
+          }
+        }
+
+        r = patterns[i].substring(0,rIndex);
+        g = patterns[i].substring(rIndex + 1, gIndex);
+        b = patterns[i].substring(gIndex + 1, bIndex);
+        Serial.print("colGen i - ");
+        Serial.println(i);
+        reds[i] = r.toInt();
+        greens[i] = g.toInt();
+        blues[i] = b.toInt();
+        Serial.print("colors[i] - ");
+        Serial.println(strip.Color(reds[i], greens[i], blues[i]));
+      }
     }
 
     void index() {
@@ -60,17 +98,26 @@ class endpoints {
     }
 
     void pattern() {
+      server.send(200, "text/html", html);
       String pattern = server.arg("p");
       std::vector<uint32_t> colors;
-      Serial.println(pattern);
-      Serial.println("-----------------------------------------");
-      tokenizer(pattern);
+      patternGen(pattern, '_');
+      colorGen();
+      Serial.println("pattern generated");
+      for(int i = 0; i < strip.numPixels() - 1; ++i) {
+        Serial.println(i);
+        for(int j = 0; j < totalPattern; ++j) {
+          Serial.print("\t");
+          Serial.println(j);
+          strip.setPixelColor(i, strip.Color(reds[j],greens[j],blues[j]));
+        }
+      }
     }
 
-    void setup_endpoints() {
-      server.on(index_uri, std::bind(&endpoints::index, this));
-      server.on(fill_uri, std::bind(&endpoints::solid_color, this));
-      server.on(pattern_uri, std::bind(&endpoints::pattern, this));
+    void setupEndpoints() {
+      server.on(index_uri, std::bind(&Endpoints::index, this));
+      server.on(fill_uri, std::bind(&Endpoints::solid_color, this));
+      server.on(pattern_uri, std::bind(&Endpoints::pattern, this));
       server.begin();    
     }
 
@@ -78,10 +125,15 @@ class endpoints {
       String index_uri = "/index";
       String fill_uri = "/solid_color";
       String pattern_uri = "/pattern_color";
+      String patterns[100] = { " " };
+      uint8_t reds[100] = { 0 };
+      uint8_t greens[100] = { 0 };
+      uint8_t blues[100] = { 0 };
+      uint8_t totalPattern = 0;
 };
 
 void setup() {
-  endpoints ep;
+  Endpoints ep;
   // put your setup code here, to run once:
   Serial.begin(115200);
   Serial.println("Connecting");
@@ -92,7 +144,7 @@ void setup() {
     Serial.print(".");
   }
 
-  ep.setup_endpoints();
+  ep.setupEndpoints();
   
   Serial.println();
   Serial.println(WiFi.localIP());
