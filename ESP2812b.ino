@@ -150,7 +150,7 @@ class Endpoints {
     }
 
     void sparkle() {
-
+      //not yet implemented
     }
 
     void nextSparkle() {
